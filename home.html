@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma</title>
+    <link rel="stylesheet" href="mystyle.css">
+</head>
+<body>
+
+<!-- MAIN (Center website) -->
+<div class="main">
+
+    <h1>Emma Mc Donald</h1>
+    <hr>
+    
+    <h2>PORTFOLIO</h2>
+    
+    <div id="myBtnContainer">
+      <button class="btn active" onclick="filterSelection('all')"> Show all</button>
+      <button class="btn" onclick="filterSelection('nature')"> 3D Art</button>
+      <button class="btn" onclick="filterSelection('cars')"> UX/UI Design</button>
+      <button class="btn" onclick="filterSelection('people')"> Graphic Design</button>
+    </div>
+    
+    <!-- Portfolio Gallery Grid -->
+    <div class="row">
+      <div class="column nature">
+        <div class="content">
+                    <img src="photo/blueguy.jpg" alt="poster of 3d art" style="width:100%">
+                    <h4>Graphic</h4>
+                    <p>The charector in the centre is another one of my 3D</p>
+                  
+              
+                
+                  <img src="photo/eyes.jpg" alt="eyes poster" style="width:100%">
+                    <h4>Eyes</h4>
+                    <p>Graphic design made in Procreate</p>
+                
+                
+                  <img src="photo/flower.png" alt="Nature" style="width:100%">
+                    <h4>Flowers</h4>
+                    <p>An abstract 3D design inspired by Flowers</p>
+        </div>
+      </div>
+        <!-- //////////////////////////////////////////////////////////////////////////////////// -->
+        <div class="column nature">
+          <div class="content">
+            <img src="photo/seabug.jpg" alt="poster of 3d art" style="width:100%">
+            <h4>3D Art</h4>
+            <p>The sea bug a 3D creature i deisgned and created.</p>
+          </div>
+        </div>
+        <div class="column nature">
+          <div class="content">
+          <img src="photo/bedroom.jpg" alt="eyes poster" style="width:100%">
+            <h4>A bedroom</h4>
+            <p>Quick 3D bedroom Design</p>
+          </div>
+        </div>
+        <div class="column nature">
+          <div class="content">
+          <img src="photo/blonde.jpg" alt="Nature" style="width:100%">
+            <h4>Flowers</h4>
+            <p>An abstract 3D design inspired by Flowers</p>
+          </div>
+        </div>
+     
+          
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      </div>
+    <!-- ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////UI///////////////////////UX/////////////////////////////////////////////////////////////////////////////////// -->
+      <div class="column cars">
+        <div class="content">
+          <img src="photo/korak.png" alt="Korak" style="width:100%">
+          <h4>Korak</h4>
+          <p>3D model inspired by the video game creature</p>
+        </div>
+      </div>
+      <div class="column cars">
+        <div class="content">
+        <img src="photo/lamb.jpg" alt="lamb" style="width:100%">
+          <h4>lamb</h4>
+          <p>3D models </p>
+        </div>
+      </div>
+      <div class="column cars">
+        <div class="content">
+        <img src="photo/Strawberry-Summer.jpg" alt="strawberry poster " style="width:100%">
+          <h4>Strawberry-Summer</h4>
+          <p>Poster work</p>
+        </div>
+      </div>
+
+       <!-- ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////UI///////////////////////UX/////////////////////////////////////////////////////////////////////////////////// -->
+    <div class="column cars">
+      <div class="content">
+        <img src="photo/maintodo.png" alt="Korak" style="width:100%">
+        <h4>Korak</h4>
+        <p>3D model inspired by the video game creature</p>
+      </div>
+    </div>
+    <div class="column cars">
+      <div class="content">
+      <img src="photo/fulltodo.png" alt="lamb" style="width:100%">
+        <h4>lamb</h4>
+        <p>3D models </p>
+      </div>
+    </div>
+    <div class="column cars">
+      <div class="content">
+      <img src="photo/phonetodo.png" alt="strawberry poster " style="width:100%">
+        <h4>Strawberry-Summer</h4>
+        <p>Poster work</p>
+      </div>
+    </div>
+      <!-- /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+      <div class="column people">
+        <div class="content">
+          <img src="photo/fish.jpg" alt="fishys" style="width:100%">
+          <h4>Fishys</h4>
+          <p>3D model design </p>
+        </div>
+      </div>
+      <div class="column people">
+        <div class="content">
+        <img src="photo/camp.jpg" alt="camping" style="width:100%">
+          <h4>Camping</h4>
+          <p>Another version of this is at the bottom of the page</p>
+        </div>
+      </div>
+      <div class="column people">
+        <div class="content">
+        <img src="photo/tube.jpg" alt="tube image" style="width:100%">
+          <h4>LOOP</h4>
+          <p>An abstract 3D design</p>
+        </div>
+
+       
+
+        </div>
+      </div>
+
+      <div class="Tree">
+      <img src="photo/Tree.png" alt="Tree camping scene" style="width:100% "  >
+    </div>
+      
+    </div>
+
+
+  
+<footer>
+ 
+</footer>
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<script>
+    filterSelection("all")
+    function filterSelection(c) {
+      var x, i;
+      x = document.getElementsByClassName("column");
+      if (c == "all") c = "";
+      for (i = 0; i < x.length; i++) {
+        w3RemoveClass(x[i], "show");
+        if (x[i].className.indexOf(c) > -1) w3AddClass(x[i], "show");
+      }
+    }
+    
+    function w3AddClass(element, name) {
+      var i, arr1, arr2;
+      arr1 = element.className.split(" ");
+      arr2 = name.split(" ");
+      for (i = 0; i < arr2.length; i++) {
+        if (arr1.indexOf(arr2[i]) == -1) {element.className += " " + arr2[i];}
+      }
+    }
+    
+    function w3RemoveClass(element, name) {
+      var i, arr1, arr2;
+      arr1 = element.className.split(" ");
+      arr2 = name.split(" ");
+      for (i = 0; i < arr2.length; i++) {
+        while (arr1.indexOf(arr2[i]) > -1) {
+          arr1.splice(arr1.indexOf(arr2[i]), 1);     
+        }
+      }
+      element.className = arr1.join(" ");
+    }
+    
+    
+    // Add active class to the current button (highlight it)
+    var btnContainer = document.getElementById("myBtnContainer");
+    var btns = btnContainer.getElementsByClassName("btn");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener("click", function(){
+        var current = document.getElementsByClassName("active");
+        current[0].className = current[0].className.replace(" active", "");
+        this.className += " active";
+      });
+    }
+    </script>
+      
+</body>
