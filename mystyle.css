@@ -18,10 +18,10 @@ body {
 
 .item{
   width: 20vw;
-  background-color: rgb(255, 60, 60);
+ 
   margin: 1vw;
-  padding: 10px;
-  font-size: xx-large;
+  padding: 2px;
+  font-size: x-large;
   border-radius: 10px;
 }
 .item:hover{
@@ -53,7 +53,7 @@ img{
 }
 @media screen and (orientation:portrait) {
   .item{
-      width: 70vw;
+      width: 30vw;
       margin: 5vw;
       padding: 5vw;
       border-radius: 20px;
@@ -101,7 +101,7 @@ img{
 
 /* Center website */
 .main {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: auto;
 }
 
