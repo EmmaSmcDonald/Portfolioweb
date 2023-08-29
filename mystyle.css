@@ -101,8 +101,10 @@ img{
 
 /* Center website */
 .main {
-  max-width: 1200px;
-  margin: auto;
+  max-width: 1900px;
+  margin: auto
+;
+  
 }
 
 h1 {
