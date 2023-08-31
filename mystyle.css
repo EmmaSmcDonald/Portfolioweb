@@ -101,8 +101,10 @@ img{
 
 /* Center website */
 .main {
-  max-width: 1900px;
+  max-width: 1800px;
   margin: auto
+  
+
 ;
   
 }
@@ -124,7 +126,7 @@ h1 {
 
 /* Create three equal columns that floats next to each other */
 .column {
-  float: left;
+  float: none;
   /* width: 33.33%; */
   display: none; /* Hide all elements by default */
 }
