@@ -46,6 +46,10 @@ h1 {
 
 
 
+#logo {
+  width: 30%;
+}
+
 
 
 
@@ -75,6 +79,9 @@ img{
 
   .colm{
     float: left;
+  }
+  #logo{
+    width:100vw ;
   }
 }
 
@@ -192,6 +199,4 @@ top: 350%;
 
 }
 
-#logo {
-  width: 30%;
-}
+
