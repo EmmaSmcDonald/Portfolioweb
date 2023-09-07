@@ -56,10 +56,14 @@ img{
 }
 @media screen and (orientation:portrait) {
   .item{
-      width: 30vw;
-      margin: 5vw;
-      padding: 5vw;
+      width: 40vw;
+      margin: 2vw;
+      padding: 0vw;
       border-radius: 20px;
+  }
+  img{
+    width:inherit;
+    margin: 0;
   }
   .item:hover{
       margin: 5vw;
@@ -188,3 +192,6 @@ top: 350%;
 
 }
 
+#logo {
+  width: 30%;
+}
