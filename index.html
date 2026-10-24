@@ -50,20 +50,29 @@
     const videoElement = document.getElementById("webcam");
 
     let timerInterval = null;
+    let pollInterval = null;
     let startTime = 0;
+    let activeChannel = null;
 
-    // Start Camera
+    // Start Back-Facing Camera
     async function startCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } }
+        });
         videoElement.srcObject = stream;
       } catch (e) {
-        try { videoElement.srcObject = await navigator.mediaDevices.getUserMedia({ video: true }); } catch (err) {}
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          videoElement.srcObject = fallbackStream;
+        } catch (err) {
+          console.error("Camera access denied or unavailable.");
+        }
       }
     }
     startCamera();
 
-    // Periodically check if ESP32 is pinging Supabase
+    // Check ESP32 Online Status every 3 seconds
     async function checkESPConnection() {
       const { data, error } = await db.from("disarm_game_control").select("device_status").eq("id", 1).single();
       if (data && data.device_status === "ONLINE") {
@@ -74,11 +83,40 @@
         espStatusDisplay.style.color = "red";
       }
     }
-    setInterval(checkESPConnection, 3000); // Check every 3 seconds
+    setInterval(checkESPConnection, 3000);
 
     nameInput.addEventListener("input", () => {
       startBtn.disabled = nameInput.value.trim() === "";
     });
+
+    // Helper function when game ends
+    async function handleGameResult(result) {
+      if (!timerInterval) return; // Prevent double trigger
+
+      clearInterval(timerInterval);
+      clearInterval(pollInterval);
+      timerInterval = null;
+
+      const finalTime = result.time_seconds ? result.time_seconds.toFixed(2) : ((Date.now() - startTime) / 1000).toFixed(2);
+      timerDisplay.innerText = `${finalTime}s`;
+
+      // Update player name in database result row
+      if (result.id) {
+        await db.from("disarm_game_results").update({ player_name: nameInput.value.trim() }).eq("id", result.id);
+      }
+
+      statusMsg.innerText = result.status === "DEFUSED" ? "BOMB DEFUSED!" : "BOOM! GAME OVER!";
+
+      if (activeChannel) {
+        db.removeChannel(activeChannel);
+        activeChannel = null;
+      }
+
+      setTimeout(() => {
+        startBtn.disabled = false;
+        nameInput.disabled = false;
+      }, 3000);
+    }
 
     // Start Game Button Clicked
     startBtn.addEventListener("click", async () => {
@@ -86,38 +124,37 @@
       nameInput.disabled = true;
       statusMsg.innerText = "DEFUSE THE BOMB!";
 
-      // Tell ESP32 to start
+      const gameStartTimeStamp = new Date().toISOString();
+
+      // 1. Setup Realtime Listener FIRST
+      activeChannel = db.channel('results-listener')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'disarm_game_results' }, payload => {
+          handleGameResult(payload.new);
+        })
+        .subscribe();
+
+      // 2. Tell ESP32 to start via Supabase
       await db.from("disarm_game_control").update({ command: "START" }).eq("id", 1);
 
-      // Start local timer
+      // 3. Start local timer
       startTime = Date.now();
       timerInterval = setInterval(() => {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
         timerDisplay.innerText = `${elapsed}s`;
       }, 50);
 
-      // Listen for result from ESP32
-      db.channel('results-listener')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'disarm_game_results' }, payload => {
-          const result = payload.new;
-          
-          clearInterval(timerInterval);
-          const finalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-          timerDisplay.innerText = `${finalTime}s`;
+      // 4. Backup Poller (Checks every 1 sec in case Realtime misses the packet)
+      pollInterval = setInterval(async () => {
+        const { data } = await db.from("disarm_game_results")
+          .select("*")
+          .gt("created_at", gameStartTimeStamp)
+          .order("created_at", { ascending: false })
+          .limit(1);
 
-          // Update player name in database result row
-          db.from("disarm_game_results").update({ player_name: nameInput.value.trim() }).eq("id", result.id);
-
-          statusMsg.innerText = result.status === "DEFUSED" ? "BOMB DEFUSED!" : "BOOM! GAME OVER!";
-
-          setTimeout(() => {
-            startBtn.disabled = false;
-            nameInput.disabled = false;
-          }, 3000);
-
-          db.removeChannel(this);
-        })
-        .subscribe();
+        if (data && data.length > 0) {
+          handleGameResult(data[0]);
+        }
+      }, 1000);
     });
   </script>
 </body>
