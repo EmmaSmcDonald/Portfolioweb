@@ -77,6 +77,7 @@
     let lastChangeTime = Date.now();
 
     // Check if ESP32 heartbeat counter is actively changing
+    // Check if ESP32 heartbeat counter is actively changing (Threshold raised to 12 seconds)
     async function checkESPConnection() {
       const { data, error } = await db.from("disarm_game_control").select("heartbeat").eq("id", 1).single();
       
@@ -84,14 +85,13 @@
 
       if (data && data.heartbeat !== null) {
         if (data.heartbeat !== lastHeartbeatValue) {
-          // Heartbeat changed! ESP32 is online and ticking.
           lastHeartbeatValue = data.heartbeat;
           lastChangeTime = currentTime;
           espStatusDisplay.innerText = "ESP32 Status: Connected & Online";
           espStatusDisplay.style.color = "green";
         } else {
-          // Heartbeat is the same. Has it been frozen for more than 6 seconds?
-          if (currentTime - lastChangeTime > 6000) {
+          // Changed from 6000 to 12000 ms to handle hotspot hiccups
+          if (currentTime - lastChangeTime > 12000) {
             espStatusDisplay.innerText = "ESP32 Status: Offline / Not responding";
             espStatusDisplay.style.color = "red";
           }
@@ -106,40 +106,6 @@
     nameInput.addEventListener("input", () => {
       startBtn.disabled = nameInput.value.trim() === "";
     });
-
-    // Helper function when game ends
-    async function handleGameResult(result) {
-      if (!timerInterval) return; // Prevent double trigger
-
-      // 1. Stop local timer immediately
-      clearInterval(timerInterval);
-      clearInterval(pollInterval);
-      timerInterval = null;
-
-      // 2. Calculate the exact time from the website's perspective
-      const finalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-      timerDisplay.innerText = `${finalTime}s`;
-
-      // 3. Save the accurate final time and player name to the database result row
-      if (result.id) {
-        await db.from("disarm_game_results").update({ 
-          player_name: nameInput.value.trim(),
-          time_seconds: parseFloat(finalTime) 
-        }).eq("id", result.id);
-      }
-
-      statusMsg.innerText = result.status === "DEFUSED" ? "BOMB DEFUSED!" : "BOOM! GAME OVER!";
-
-      if (activeChannel) {
-        db.removeChannel(activeChannel);
-        activeChannel = null;
-      }
-
-      setTimeout(() => {
-        startBtn.disabled = false;
-        nameInput.disabled = false;
-      }, 3000);
-    }
 
     // Start Game Button Clicked
     startBtn.addEventListener("click", async () => {
@@ -157,7 +123,7 @@
       // 2. Tell ESP32 to start via Supabase
       await db.from("disarm_game_control").update({ command: "START" }).eq("id", 1);
 
-      // 3. Check if ESP32 accepted it or threw a wire error (poll for 1.5 seconds)
+      // 3. Check if ESP32 accepted it or threw a wire error (Patient polling up to 4.5 seconds)
       let checkAttempts = 0;
       let startAccepted = false;
 
@@ -207,10 +173,11 @@
           }, 1000);
         }
 
-        // If it times out (ESP32 offline)
-        if (checkAttempts > 5 && !startAccepted) {
+        // If it times out (Increased to 15 attempts = 4.5 seconds)
+        if (checkAttempts > 15 && !startAccepted) {
           clearInterval(checkInterval);
           statusMsg.innerText = "ESP32 not responding!";
+          statusMsg.style.color = "red";
           startBtn.disabled = false;
           nameInput.disabled = false;
         }
