@@ -73,17 +73,35 @@
     startCamera();
 
     // Check ESP32 Online Status every 3 seconds
+    let lastHeartbeatValue = null;
+    let lastChangeTime = Date.now();
+
+    // Check if ESP32 heartbeat counter is actively changing
     async function checkESPConnection() {
-      const { data, error } = await db.from("disarm_game_control").select("device_status").eq("id", 1).single();
-      if (data && data.device_status === "ONLINE") {
-        espStatusDisplay.innerText = "ESP32 Status: Connected & Online";
-        espStatusDisplay.style.color = "green";
+      const { data, error } = await db.from("disarm_game_control").select("heartbeat").eq("id", 1).single();
+      
+      const currentTime = Date.now();
+
+      if (data && data.heartbeat !== null) {
+        if (data.heartbeat !== lastHeartbeatValue) {
+          // Heartbeat changed! ESP32 is online and ticking.
+          lastHeartbeatValue = data.heartbeat;
+          lastChangeTime = currentTime;
+          espStatusDisplay.innerText = "ESP32 Status: Connected & Online";
+          espStatusDisplay.style.color = "green";
+        } else {
+          // Heartbeat is the same. Has it been frozen for more than 6 seconds?
+          if (currentTime - lastChangeTime > 6000) {
+            espStatusDisplay.innerText = "ESP32 Status: Offline / Not responding";
+            espStatusDisplay.style.color = "red";
+          }
+        }
       } else {
         espStatusDisplay.innerText = "ESP32 Status: Offline / Not responding";
         espStatusDisplay.style.color = "red";
       }
     }
-    setInterval(checkESPConnection, 3000);
+    setInterval(checkESPConnection, 3000); // Check every 3 seconds
 
     nameInput.addEventListener("input", () => {
       startBtn.disabled = nameInput.value.trim() === "";
