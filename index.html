@@ -98,11 +98,12 @@
       overflow: hidden;
     }
 
+    /* Rotated 180 degrees again to cancel out the body rotation, making the camera right-side up */
     video {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      /* Camera rotation removed so it stays right-side up */
+      transform: rotate(180deg);
     }
 
     /* Black Block Deadzone Overlay (Bottom 25%) */
@@ -143,17 +144,6 @@
   </div>
 
   <script>
-    async function lockScreenOrientation() {
-      try {
-        if (screen.orientation && screen.orientation.lock) {
-          await screen.orientation.lock('portrait-secondary');
-        }
-      } catch (err) {
-        console.log("Orientation lock restricted by browser policy:", err);
-      }
-    }
-    lockScreenOrientation();
-
     const SUPABASE_URL = "https://quywbkffnyoemooinirk.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_zqZoZBpE53VUjUGAik75Sw_6WxNQOju";
 
@@ -262,8 +252,6 @@
 
     // Start Game Button Clicked
     startBtn.addEventListener("click", async () => {
-      lockScreenOrientation();
-
       startBtn.disabled = true;
       nameInput.disabled = true;
       statusMsg.innerText = "CHECKING...";
