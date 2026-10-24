@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Game UI</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      font-family: sans-serif;
+      background: #121212;
+      color: #fff;
+      margin: 0;
+      padding-top: calc(env(safe-area-inset-top) + 6px);
+      padding-right: 6px;
+      padding-bottom: calc(env(safe-area-inset-bottom) + 6px);
+      padding-left: 6px;
+      /* Uses dynamic viewport height so it adapts properly to browser toolbars */
+      height: 100dvh;
+      overflow: hidden;
+      transform: rotate(180deg);
+    }
+
+    /* Minimal Top Control Bar */
+    #top-bar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      width: 100%;
+      max-width: 450px;
+      margin-bottom: 4px;
+    }
+
+    input {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 14px;
+      background: #222;
+      border: 1px solid #444;
+      color: #fff;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #444;
+      color: #888;
+      cursor: not-allowed;
+    }
+
+    /* Connection Status Dot Icon */
+    #status-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #dc3545; /* Red = offline */
+      flex-shrink: 0;
+      box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    }
+
+    /* Timer positioned right next to START */
+    #timer {
+      font-size: 16px;
+      font-weight: bold;
+      min-width: 55px;
+      text-align: right;
+    }
+
+    /* Status Message Row */
+    #status-msg {
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+      height: 18px;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    /* Maximized Camera Container */
+    #camera-container {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      background: #000;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: rotate(180deg);
+    }
+
+    /* Black Block Deadzone Overlay (Shrunk to 15%) */
+    .deadzone-block {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 15%;
+      background: #000000;
+      border-top: 2px dashed rgba(255, 255, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 11px;
+      letter-spacing: 2px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Minimal Top Bar with Timer next to Start -->
+  <div id="top-bar">
+    <div id="status-icon" title="ESP32 Status"></div>
+    <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
+    <button id="start-btn" disabled>START</button>
+    <div id="timer">0.00s</div>
+  </div>
+
+  <div id="status-msg"></div>
+
+  <!-- Large Camera Feed with Shrunk 15% Deadzone Block -->
+  <div id="camera-container">
+    <video id="webcam" autoplay playsinline></video>
+    <div class="deadzone-block">DEADZONE</div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://quywbkffnyoemooinirk.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_zqZoZBpE53VUjUGAik75Sw_6WxNQOju";
+
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const nameInput = document.getElementById("player-name");
+    const startBtn = document.getElementById("start-btn");
+    const timerDisplay = document.getElementById("timer");
+    const statusMsg = document.getElementById("status-msg");
+    const statusIcon = document.getElementById("status-icon");
+    const videoElement = document.getElementById("webcam");
+
+    let timerInterval = null;
+    let pollInterval = null;
+    let startTime = 0;
+    let activeChannel = null;
+    let currentStream = null;
+
+    // Start Back-Facing Camera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } }
+        });
+        currentStream = stream;
+        videoElement.srcObject = stream;
+      } catch (e) {
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          currentStream = fallbackStream;
+          videoElement.srcObject = fallbackStream;
+        } catch (err) {
+          console.error("Camera unavailable.");
+          statusMsg.innerText = "NO CAMERA";
+          statusMsg.style.color = "#dc3545";
+        }
+      }
+    }
+    startCamera();
+
+    let lastHeartbeatValue = null;
+    let lastChangeTime = Date.now();
+
+    // Check ESP32 Online Status (12 second threshold)
+    async function checkESPConnection() {
+      const { data } = await db.from("disarm_game_control").select("heartbeat").eq("id", 1).single();
+      const currentTime = Date.now();
+
+      if (data && data.heartbeat !== null) {
+        if (data.heartbeat !== lastHeartbeatValue) {
+          lastHeartbeatValue = data.heartbeat;
+          lastChangeTime = currentTime;
+          statusIcon.style.background = "#28a745"; // Green = online
+        } else {
+          if (currentTime - lastChangeTime > 12000) {
+            statusIcon.style.background = "#dc3545"; // Red = offline
+          }
+        }
+      } else {
+        statusIcon.style.background = "#dc3545";
+      }
+    }
+    setInterval(checkESPConnection, 3000);
+
+    nameInput.addEventListener("input", () => {
+      startBtn.disabled = nameInput.value.trim() === "";
+    });
+
+    // Handle Game Result (Success / Fail)
+    async function handleGameResult(result) {
+      if (!timerInterval) return;
+
+      clearInterval(timerInterval);
+      clearInterval(pollInterval);
+      timerInterval = null;
+
+      const finalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+      timerDisplay.innerText = `${finalTime}s`;
+
+      if (result.id) {
+        await db.from("disarm_game_results").update({ 
+          player_name: nameInput.value.trim(),
+          time_seconds: parseFloat(finalTime) 
+        }).eq("id", result.id);
+      }
+
+      if (result.status === "DEFUSED") {
+        statusMsg.innerText = "SUCCESS";
+        statusMsg.style.color = "#28a745";
+      } else {
+        statusMsg.innerText = "FAIL";
+        statusMsg.style.color = "#dc3545";
+      }
+
+      if (activeChannel) {
+        db.removeChannel(activeChannel);
+        activeChannel = null;
+      }
+
+      setTimeout(() => {
+        startBtn.disabled = false;
+        nameInput.disabled = false;
+      }, 3000);
+    }
+
+    // Start Game Button Clicked
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+      nameInput.disabled = true;
+      statusMsg.innerText = "CHECKING...";
+      statusMsg.style.color = "#ffc107";
+
+      activeChannel = db.channel('results-listener')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'disarm_game_results' }, payload => {
+          handleGameResult(payload.new);
+        })
+        .subscribe();
+
+      await db.from("disarm_game_control").update({ command: "START" }).eq("id", 1);
+
+      let checkAttempts = 0;
+      let startAccepted = false;
+
+      const checkInterval = setInterval(async () => {
+        checkAttempts++;
+        const { data } = await db.from("disarm_game_control").select("command").eq("id", 1).single();
+
+        if (data && data.command === "ERROR_WIRES") {
+          clearInterval(checkInterval);
+          statusMsg.innerText = "CONNECT WIRES!";
+          statusMsg.style.color = "#dc3545";
+          
+          await db.from("disarm_game_control").update({ command: "IDLE" }).eq("id", 1);
+
+          startBtn.disabled = false;
+          nameInput.disabled = false;
+          startAccepted = true;
+        } else if (data && data.command === "IDLE" && !startAccepted) {
+          clearInterval(checkInterval);
+          startAccepted = true;
+          statusMsg.style.color = "#fff";
+          statusMsg.innerText = "ACTIVE";
+
+          startTime = Date.now();
+          timerInterval = setInterval(() => {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            timerDisplay.innerText = `${elapsed}s`;
+          }, 50);
+
+          const gameStartTimeStamp = new Date().toISOString();
+          pollInterval = setInterval(async () => {
+            const { data: resData } = await db.from("disarm_game_results")
+              .select("*")
+              .gt("created_at", gameStartTimeStamp)
+              .order("created_at", { ascending: false })
+              .limit(1);
+
+            if (resData && resData.length > 0) {
+              handleGameResult(resData[0]);
+            }
+          }, 1000);
+        }
+
+        if (checkAttempts > 15 && !startAccepted) {
+          clearInterval(checkInterval);
+          statusMsg.innerText = "ESP32 ERROR";
+          statusMsg.style.color = "#dc3545";
+          startBtn.disabled = false;
+          nameInput.disabled = false;
+        }
+      }, 300);
+    });
+  </script>
+</body>
+</html>
