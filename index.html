@@ -8,7 +8,6 @@
   <style>
     * { box-sizing: border-box; }
     
-    /* Flips the entire website (UI + Camera) upside down */
     body {
       display: flex;
       flex-direction: column;
@@ -143,6 +142,18 @@
   </div>
 
   <script>
+    // Force Lock Screen to Upside-Down Portrait
+    async function lockScreenOrientation() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('portrait-secondary');
+        }
+      } catch (err) {
+        console.log("Orientation lock restricted by browser policy:", err);
+      }
+    }
+    lockScreenOrientation();
+
     const SUPABASE_URL = "https://quywbkffnyoemooinirk.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_zqZoZBpE53VUjUGAik75Sw_6WxNQOju";
 
@@ -251,6 +262,9 @@
 
     // Start Game Button Clicked
     startBtn.addEventListener("click", async () => {
+      // Also request orientation lock on click in case browser policy blocked it on load
+      lockScreenOrientation();
+
       startBtn.disabled = true;
       nameInput.disabled = true;
       statusMsg.innerText = "CHECKING...";
