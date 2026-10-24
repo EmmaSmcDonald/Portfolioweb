@@ -1,30 +1,236 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phone Image</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cut The Wire Game</title>
+  
+  <!-- Supabase JS Client library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-        img {
-            max-width: 100%;
-            max-height: 100vh;
-            object-fit: contain;
-        }
-    </style>
+  <style>
+    /* Basic Structural Sizing & Positioning Only */
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: sans-serif;
+      margin: 20px;
+    }
+
+    #controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+
+    #player-name {
+      padding: 8px;
+      font-size: 16px;
+      width: 200px;
+    }
+
+    #start-btn {
+      padding: 8px 16px;
+      font-size: 16px;
+    }
+
+    #timer {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    #status-msg {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    /* Video container & Feed Sizing */
+    #camera-container {
+      width: 100%;
+      max-width: 640px;
+      height: 480px;
+      background-color: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
 </head>
 <body>
-    <img src="phone.png" alt="Phone Image">
+
+  <h1>Cut The Wire Game</h1>
+
+  <!-- Top Controls -->
+  <div id="controls">
+    <input type="text" id="player-name" placeholder="Enter your name" />
+    <button id="start-btn" disabled>Start Game</button>
+  </div>
+
+  <!-- Connection / ESP Status -->
+  <div>
+    ESP32 Status: <span id="esp-status">Disconnected</span>
+  </div>
+
+  <!-- Timer & Game Status -->
+  <div id="timer">0.00s</div>
+  <div id="status-msg"></div>
+
+  <!-- Camera Section -->
+  <div id="camera-container">
+    <video id="webcam" autoplay playsinline></video>
+  </div>
+
+  <script>
+    // =========================================================
+    // CONFIGURATION (Fill these in!)
+    // =========================================================
+    const ESP32_IP = "192.168.1.100"; // Replace with your ESP32's IP from Serial Monitor
+    const SUPABASE_URL = "https://quywbkffnyoemooinirk.supabase.co/rest/v1/disarm_results";
+    const SUPABASE_ANON_KEY = "sb_publishable_zqZoZBpE53VUjUGAik75Sw_6WxNQOju";
+
+    // Initialize Supabase Client
+    const { createClient } = supabase;
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // DOM Elements
+    const nameInput = document.getElementById("player-name");
+    const startBtn = document.getElementById("start-btn");
+    const timerDisplay = document.getElementById("timer");
+    const statusMsg = document.getElementById("status-msg");
+    const espStatus = document.getElementById("esp-status");
+    const videoElement = document.getElementById("webcam");
+
+    // Game Variables
+    let ws = null;
+    let startTime = 0;
+    let timerInterval = null;
+    let gameActive = false;
+
+    // =========================================================
+    // 1. BACK-FACING CAMERA FEED SETUP
+    // =========================================================
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } } // Requests rear camera
+        });
+        videoElement.srcObject = stream;
+      } catch (err) {
+        console.warn("Back camera not found/accessible, trying default camera:", err);
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          videoElement.srcObject = fallbackStream;
+        } catch (e) {
+          alert("Camera access denied or unavailable.");
+        }
+      }
+    }
+    startCamera();
+
+    // =========================================================
+    // 2. NAME INPUT VALIDATION
+    // =========================================================
+    nameInput.addEventListener("input", () => {
+      // Enable Start button only if name is not empty
+      startBtn.disabled = nameInput.value.trim() === "";
+    });
+
+    // =========================================================
+    // 3. WEBSOCKET CONNECTION TO ESP32
+    // =========================================================
+    function connectWebSocket() {
+      ws = new WebSocket(`ws://${ESP32_IP}:81`);
+
+      ws.onopen = () => {
+        espStatus.innerText = "Connected";
+      };
+
+      ws.onclose = () => {
+        espStatus.innerText = "Disconnected (Retrying...)";
+        setTimeout(connectWebSocket, 2000);
+      };
+
+      ws.onmessage = (event) => {
+        const msg = event.data;
+        if (msg === "EXPLODE") {
+          endGame("EXPLODED");
+        } else if (msg === "DEFUSED") {
+          endGame("DEFUSED");
+        }
+      };
+    }
+    connectWebSocket();
+
+    // =========================================================
+    // 4. GAME CONTROLS & TIMER
+    // =========================================================
+    startBtn.addEventListener("click", () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("ESP32 is not connected!");
+        return;
+      }
+
+      // Lock controls
+      gameActive = true;
+      startBtn.disabled = true;
+      nameInput.disabled = true;
+      statusMsg.innerText = "DEFUSE THE BOMB!";
+
+      // Notify ESP32
+      ws.send("START");
+
+      // Start timer
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+        timerDisplay.innerText = `${elapsed}s`;
+      }, 50);
+    });
+
+    async function endGame(result) {
+      if (!gameActive) return;
+      gameActive = false;
+      clearInterval(timerInterval);
+
+      const finalTime = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
+      const playerName = nameInput.value.trim();
+
+      // Update UI
+      statusMsg.innerText = result === "DEFUSED" ? "BOMB DEFUSED!" : "BOOM! GAME OVER!";
+
+      // Send outcome to Supabase
+      try {
+        const { error } = await supabaseClient
+          .from("game_results")
+          .insert([
+            { player_name: playerName, time_seconds: finalTime, status: result }
+          ]);
+
+        if (error) {
+          console.error("Error sending to Supabase:", error);
+        } else {
+          console.log("Result saved to Supabase successfully!");
+        }
+      } catch (err) {
+        console.error("Supabase request failed:", err);
+      }
+
+      // Re-enable inputs for reset
+      setTimeout(() => {
+        startBtn.disabled = false;
+        nameInput.disabled = false;
+      }, 2000);
+    }
+  </script>
 </body>
 </html>
