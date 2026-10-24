@@ -102,6 +102,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      /* Camera rotation removed so it stays right-side up */
     }
 
     /* Black Block Deadzone Overlay (Bottom 25%) */
@@ -142,7 +143,6 @@
   </div>
 
   <script>
-    // Force Lock Screen to Upside-Down Portrait
     async function lockScreenOrientation() {
       try {
         if (screen.orientation && screen.orientation.lock) {
@@ -262,7 +262,6 @@
 
     // Start Game Button Clicked
     startBtn.addEventListener("click", async () => {
-      // Also request orientation lock on click in case browser policy blocked it on load
       lockScreenOrientation();
 
       startBtn.disabled = true;
