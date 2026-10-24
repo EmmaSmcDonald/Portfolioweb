@@ -145,11 +145,9 @@
     startBtn.addEventListener("click", async () => {
       startBtn.disabled = true;
       nameInput.disabled = true;
-      statusMsg.innerText = "DEFUSE THE BOMB!";
+      statusMsg.innerText = "CHECKING WIRES...";
 
-      const gameStartTimeStamp = new Date().toISOString();
-
-      // 1. Setup Realtime Listener FIRST
+      // 1. Setup Realtime Listener for results FIRST
       activeChannel = db.channel('results-listener')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'disarm_game_results' }, payload => {
           handleGameResult(payload.new);
@@ -159,25 +157,64 @@
       // 2. Tell ESP32 to start via Supabase
       await db.from("disarm_game_control").update({ command: "START" }).eq("id", 1);
 
-      // 3. Start local timer
-      startTime = Date.now();
-      timerInterval = setInterval(() => {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        timerDisplay.innerText = `${elapsed}s`;
-      }, 50);
+      // 3. Check if ESP32 accepted it or threw a wire error (poll for 1.5 seconds)
+      let checkAttempts = 0;
+      let startAccepted = false;
 
-      // 4. Backup Poller (Checks every 1 sec in case Realtime misses the packet)
-      pollInterval = setInterval(async () => {
-        const { data } = await db.from("disarm_game_results")
-          .select("*")
-          .gt("created_at", gameStartTimeStamp)
-          .order("created_at", { ascending: false })
-          .limit(1);
+      const checkInterval = setInterval(async () => {
+        checkAttempts++;
+        const { data } = await db.from("disarm_game_control").select("command").eq("id", 1).single();
 
-        if (data && data.length > 0) {
-          handleGameResult(data[0]);
+        if (data && data.command === "ERROR_WIRES") {
+          // ESP32 rejected the start because wires are disconnected!
+          clearInterval(checkInterval);
+          statusMsg.innerText = "ERROR: Connect all wires first!";
+          statusMsg.style.color = "red";
+          
+          // Reset command back to IDLE in database
+          await db.from("disarm_game_control").update({ command: "IDLE" }).eq("id", 1);
+
+          // Re-enable start button
+          startBtn.disabled = false;
+          nameInput.disabled = false;
+          startAccepted = true;
+        } else if (data && data.command === "IDLE" && !startAccepted) {
+          // ESP32 accepted it and started!
+          clearInterval(checkInterval);
+          startAccepted = true;
+          statusMsg.style.color = "black";
+          statusMsg.innerText = "DEFUSE THE BOMB!";
+
+          // Start local timer (using website as authority)
+          startTime = Date.now();
+          timerInterval = setInterval(() => {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            timerDisplay.innerText = `${elapsed}s`;
+          }, 50);
+
+          // Backup Poller for results
+          const gameStartTimeStamp = new Date().toISOString();
+          pollInterval = setInterval(async () => {
+            const { data: resData } = await db.from("disarm_game_results")
+              .select("*")
+              .gt("created_at", gameStartTimeStamp)
+              .order("created_at", { ascending: false })
+              .limit(1);
+
+            if (resData && resData.length > 0) {
+              handleGameResult(resData[0]);
+            }
+          }, 1000);
         }
-      }, 1000);
+
+        // If it times out (ESP32 offline)
+        if (checkAttempts > 5 && !startAccepted) {
+          clearInterval(checkInterval);
+          statusMsg.innerText = "ESP32 not responding!";
+          startBtn.disabled = false;
+          nameInput.disabled = false;
+        }
+      }, 300);
     });
   </script>
 </body>
