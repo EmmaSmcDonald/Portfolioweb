@@ -3,108 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Cut The Wire Game</title>
+  <title>Game UI</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; }
     
-    /* Flips the entire website upside down for the inverted camera mount */
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
       font-family: sans-serif;
+      background: #121212;
+      color: #fff;
       margin: 0;
-      padding: 10px;
+      padding: 6px;
       height: 100vh;
       overflow: hidden;
-      transform: rotate(180deg);
     }
 
-    h1 {
-      font-size: 18px;
-      margin: 2px 0;
-    }
-
-    #esp-status {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 3px;
-    }
-
-    #controls {
+    /* Minimal Top Control Bar */
+    #top-bar {
       display: flex;
       gap: 6px;
+      align-items: center;
       width: 100%;
-      max-width: 400px;
-      margin-bottom: 3px;
+      max-width: 450px;
+      margin-bottom: 4px;
     }
 
     input {
       flex: 1;
-      padding: 10px;
-      font-size: 15px;
+      padding: 8px 10px;
+      font-size: 14px;
+      background: #222;
+      border: 1px solid #444;
+      color: #fff;
+      border-radius: 4px;
     }
 
     button {
-      padding: 10px 14px;
-      font-size: 15px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      background: #007bff;
+      color:#fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #444;
+      color: #888;
+      cursor: not-allowed;
+    }
+
+    /* Connection Status Dot Icon */
+    #status-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #dc3545; /* Red = offline */
+      flex-shrink: 0;
+      box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    }
+
+    /* Sub-bar for Timer and Status Feedback */
+    #info-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 450px;
+      padding: 0 2px;
+      margin-bottom: 4px;
+      height: 24px;
     }
 
     #timer {
-      font-size: 26px;
+      font-size: 18px;
       font-weight: bold;
-      margin: 2px 0;
     }
 
     #status-msg {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: bold;
-      height: 22px;
-      margin-bottom: 3px;
+      text-transform: uppercase;
     }
 
-    /* Large Full-Screen Camera Container */
+    /* Maximized Camera Container */
     #camera-container {
+      position: relative;
       width: 100%;
       flex: 1;
-      max-height: 60vh;
       background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
+      border-radius: 6px;
       overflow: hidden;
     }
 
+    /* Camera feed upside down */
     video {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transform: rotate(180deg);
+    }
+
+    /* Black Block Deadzone Overlay (Bottom 25%) */
+    .deadzone-block {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 25%;
+      background: #000000;
+      border-top: 2px dashed rgba(255, 255, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 11px;
+      letter-spacing: 2px;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
 
-  <h1>Cut The Wire Game</h1>
-
-  <!-- ESP32 Connection Indicator -->
-  <div id="esp-status">ESP32 Status: Checking...</div>
-
-  <!-- Controls -->
-  <div id="controls">
-    <input type="text" id="player-name" placeholder="Enter your name">
-    <button id="flip-camera-btn" type="button">🔄 Flip</button>
-    <button id="start-btn" disabled>Start</button>
+  <!-- Minimal Top Bar -->
+  <div id="top-bar">
+    <div id="status-icon" title="ESP32 Status"></div>
+    <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
+    <button id="start-btn" disabled>START</button>
   </div>
 
-  <div id="timer">0.00s</div>
-  <div id="status-msg"></div>
+  <!-- Timer & Status Row -->
+  <div id="info-bar">
+    <div id="timer">0.00s</div>
+    <div id="status-msg"></div>
+  </div>
 
-  <!-- Large Camera Feed -->
+  <!-- Large Camera Feed with 25% Deadzone Block -->
   <div id="camera-container">
     <video id="webcam" autoplay playsinline></video>
+    <div class="deadzone-block">DEADZONE</div>
   </div>
 
   <script>
@@ -116,65 +159,43 @@
 
     const nameInput = document.getElementById("player-name");
     const startBtn = document.getElementById("start-btn");
-    const flipCameraBtn = document.getElementById("flip-camera-btn");
     const timerDisplay = document.getElementById("timer");
     const statusMsg = document.getElementById("status-msg");
-    const espStatusDisplay = document.getElementById("esp-status");
+    const statusIcon = document.getElementById("status-icon");
     const videoElement = document.getElementById("webcam");
 
     let timerInterval = null;
     let pollInterval = null;
     let startTime = 0;
     let activeChannel = null;
-    let useEnvironmentCamera = true;
     let currentStream = null;
 
-    // Start / Switch Camera Function
+    // Start Back-Facing Camera
     async function startCamera() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-
-      const facingMode = useEnvironmentCamera ? { exact: "environment" } : "user";
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode }
+          video: { facingMode: { exact: "environment" } }
         });
         currentStream = stream;
         videoElement.srcObject = stream;
       } catch (e) {
-        // Fallback if exact environment constraint fails
         try {
-          const fallbackStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: useEnvironmentCamera ? "environment" : "user" }
-          });
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
           currentStream = fallbackStream;
           videoElement.srcObject = fallbackStream;
         } catch (err) {
-          try {
-            const genericStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            currentStream = genericStream;
-            videoElement.srcObject = genericStream;
-          } catch (finalErr) {
-            console.error("Camera access denied or unavailable.");
-            statusMsg.innerText = "Camera Error!";
-          }
+          console.error("Camera unavailable.");
+          statusMsg.innerText = "NO CAMERA";
+          statusMsg.style.color = "#dc3545";
         }
       }
     }
     startCamera();
 
-    // Flip Camera Button Handler
-    flipCameraBtn.addEventListener("click", () => {
-      useEnvironmentCamera = !useEnvironmentCamera;
-      startCamera();
-    });
-
     let lastHeartbeatValue = null;
     let lastChangeTime = Date.now();
 
-    // Check ESP32 Online Status (12 second threshold for hotspot stability)
+    // Check ESP32 Online Status (12 second threshold)
     async function checkESPConnection() {
       const { data } = await db.from("disarm_game_control").select("heartbeat").eq("id", 1).single();
       const currentTime = Date.now();
@@ -183,17 +204,14 @@
         if (data.heartbeat !== lastHeartbeatValue) {
           lastHeartbeatValue = data.heartbeat;
           lastChangeTime = currentTime;
-          espStatusDisplay.innerText = "ESP32 Status: Connected & Online";
-          espStatusDisplay.style.color = "green";
+          statusIcon.style.background = "#28a745"; // Green = online
         } else {
           if (currentTime - lastChangeTime > 12000) {
-            espStatusDisplay.innerText = "ESP32 Status: Offline / Not responding";
-            espStatusDisplay.style.color = "red";
+            statusIcon.style.background = "#dc3545"; // Red = offline
           }
         }
       } else {
-        espStatusDisplay.innerText = "ESP32 Status: Offline / Not responding";
-        espStatusDisplay.style.color = "red";
+        statusIcon.style.background = "#dc3545";
       }
     }
     setInterval(checkESPConnection, 3000);
@@ -202,7 +220,7 @@
       startBtn.disabled = nameInput.value.trim() === "";
     });
 
-    // Helper function when game ends
+    // Handle Game Result (Success / Fail)
     async function handleGameResult(result) {
       if (!timerInterval) return;
 
@@ -220,7 +238,13 @@
         }).eq("id", result.id);
       }
 
-      statusMsg.innerText = result.status === "DEFUSED" ? "BOMB DEFUSED!" : "BOOM! GAME OVER!";
+      if (result.status === "DEFUSED") {
+        statusMsg.innerText = "SUCCESS";
+        statusMsg.style.color = "#28a745";
+      } else {
+        statusMsg.innerText = "FAIL";
+        statusMsg.style.color = "#dc3545";
+      }
 
       if (activeChannel) {
         db.removeChannel(activeChannel);
@@ -237,19 +261,17 @@
     startBtn.addEventListener("click", async () => {
       startBtn.disabled = true;
       nameInput.disabled = true;
-      statusMsg.innerText = "CHECKING WIRES...";
+      statusMsg.innerText = "CHECKING...";
+      statusMsg.style.color = "#ffc107";
 
-      // 1. Setup Realtime Listener for results FIRST
       activeChannel = db.channel('results-listener')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'disarm_game_results' }, payload => {
           handleGameResult(payload.new);
         })
         .subscribe();
 
-      // 2. Tell ESP32 to start via Supabase
       await db.from("disarm_game_control").update({ command: "START" }).eq("id", 1);
 
-      // 3. Check if ESP32 accepted it or threw a wire error
       let checkAttempts = 0;
       let startAccepted = false;
 
@@ -259,8 +281,8 @@
 
         if (data && data.command === "ERROR_WIRES") {
           clearInterval(checkInterval);
-          statusMsg.innerText = "ERROR: Connect all wires first!";
-          statusMsg.style.color = "red";
+          statusMsg.innerText = "CONNECT WIRES!";
+          statusMsg.style.color = "#dc3545";
           
           await db.from("disarm_game_control").update({ command: "IDLE" }).eq("id", 1);
 
@@ -270,8 +292,8 @@
         } else if (data && data.command === "IDLE" && !startAccepted) {
           clearInterval(checkInterval);
           startAccepted = true;
-          statusMsg.style.color = "black";
-          statusMsg.innerText = "DEFUSE THE BOMB!";
+          statusMsg.style.color = "#fff";
+          statusMsg.innerText = "ACTIVE";
 
           startTime = Date.now();
           timerInterval = setInterval(() => {
@@ -295,8 +317,8 @@
 
         if (checkAttempts > 15 && !startAccepted) {
           clearInterval(checkInterval);
-          statusMsg.innerText = "ESP32 not responding!";
-          statusMsg.style.color = "red";
+          statusMsg.innerText = "ESP32 ERROR";
+          statusMsg.style.color = "#dc3545";
           startBtn.disabled = false;
           nameInput.disabled = false;
         }
