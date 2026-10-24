@@ -111,16 +111,21 @@
     async function handleGameResult(result) {
       if (!timerInterval) return; // Prevent double trigger
 
+      // 1. Stop local timer immediately
       clearInterval(timerInterval);
       clearInterval(pollInterval);
       timerInterval = null;
 
-      const finalTime = result.time_seconds ? result.time_seconds.toFixed(2) : ((Date.now() - startTime) / 1000).toFixed(2);
+      // 2. Calculate the exact time from the website's perspective
+      const finalTime = ((Date.now() - startTime) / 1000).toFixed(2);
       timerDisplay.innerText = `${finalTime}s`;
 
-      // Update player name in database result row
+      // 3. Save the accurate final time and player name to the database result row
       if (result.id) {
-        await db.from("disarm_game_results").update({ player_name: nameInput.value.trim() }).eq("id", result.id);
+        await db.from("disarm_game_results").update({ 
+          player_name: nameInput.value.trim(),
+          time_seconds: parseFloat(finalTime) 
+        }).eq("id", result.id);
       }
 
       statusMsg.innerText = result.status === "DEFUSED" ? "BOMB DEFUSED!" : "BOOM! GAME OVER!";
