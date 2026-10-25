@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Detangle Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: sans-serif;
+      background: #121212;
+      color: #fff;
+      margin: 0;
+      padding: 10px;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .game-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 400px;
+      background: #1e1e1e;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #333;
+      gap: 16px;
+    }
+
+    #top-bar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .back-btn {
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: bold;
+      background: #444;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    input {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      background: #222;
+      border: 1px solid #444;
+      color: #fff;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #444;
+      color: #888;
+      cursor: not-allowed;
+    }
+
+    #status-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #dc3545;
+      flex-shrink: 0;
+    }
+
+    #timer {
+      font-size: 48px;
+      font-weight: bold;
+      font-family: monospace;
+      margin: 10px 0;
+    }
+
+    #status-msg {
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+      height: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-card">
+    <!-- Top Control Bar -->
+    <div id="top-bar">
+      <a href="index.html" class="back-btn">⬅</a>
+      <div id="status-icon" title="ESP32 Status"></div>
+      <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
+      <button id="start-btn" disabled>START</button>
+    </div>
+
+    <!-- Timer Display -->
+    <div id="timer">0.00s</div>
+    <div id="status-msg">CLEAR ALL WEIGHTS!</div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://quywbkffnyoemooinirk.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_zqZoZBpE53VUjUGAik75Sw_6WxNQOju";
+
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const nameInput = document.getElementById("player-name");
+    const startBtn = document.getElementById("start-btn");
+    const timerDisplay = document.getElementById("timer");
+    const statusMsg = document.getElementById("status-msg");
+    const statusIcon = document.getElementById("status-icon");
+
+    let timerInterval = null;
+    let pollInterval = null;
+    let startTime = 0;
+    let activeChannel = null;
+
+    // Check ESP32 Online Status
+    async function checkESPConnection() {
+      const { data } = await db.from("detangle_game_control").select("heartbeat").eq("id", 1).single();
+      const currentTime = Date.now();
+
+      if (data && data.heartbeat !== null) {
+        if (data.heartbeat !== lastHeartbeatValue) {
+          lastHeartbeatValue = data.heartbeat;
+          lastChangeTime = currentTime;
+          statusIcon.style.background = "#28a745"; // Online
+        } else {
+          if (currentTime - lastChangeTime > 12000) {
+            statusIcon.style.background = "#dc3545"; // Offline
+          }
+        }
+      } else {
+        statusIcon.style.background = "#dc3545";
+      }
+    }
+    let lastHeartbeatValue = null;
+    let lastChangeTime = Date.now();
+    setInterval(checkESPConnection, 3000);
+
+    nameInput.addEventListener("input", () => {
+      startBtn.disabled = nameInput.value.trim() === "";
+    });
+
+    // Handle Game Result
+    async function handleGameResult(result) {
+      if (!timerInterval) return;
+
+      clearInterval(timerInterval);
+      clearInterval(pollInterval);
+      timerInterval = null;
+
+      const finalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+      timerDisplay.innerText = `${finalTime}s`;
+
+      if (result.id) {
+        await db.from("detangle_game_results").update({ 
+          player_name: nameInput.value.trim(),
+          time_seconds: parseFloat(finalTime) 
+        }).eq("id", result.id);
+      }
+
+      statusMsg.innerText = "SUCCESS!";
+      statusMsg.style.color = "#28a745";
+
+      if (activeChannel) {
+        db.removeChannel(activeChannel);
+        activeChannel = null;
+      }
+
+      setTimeout(() => {
+        startBtn.disabled = false;
+        nameInput.disabled = false;
+        statusMsg.innerText = "CLEAR ALL WEIGHTS!";
+        statusMsg.style.color = "#fff";
+      }, 3000);
+    }
+
+    // Start Button Clicked
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+      nameInput.disabled = true;
+      statusMsg.innerText = "CHECKING WEIGHTS...";
+      statusMsg.style.color = "#ffc107";
+
+      activeChannel = db.channel('detangle-results')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'detangle_game_results' }, payload => {
+          handleGameResult(payload.new);
+        })
+        .subscribe();
+
+      await db.from("detangle_game_control").update({ command: "START" }).eq("id", 1);
+
+      let checkAttempts = 0;
+      let startAccepted = false;
+
+      const checkInterval = setInterval(async () => {
+        checkAttempts++;
+        const { data } = await db.from("detangle_game_control").select("command").eq("id", 1).single();
+
+        if (data && data.command === "ERROR_WEIGHTS") {
+          clearInterval(checkInterval);
+          statusMsg.innerText = "PLACE ALL 4 WEIGHTS FIRST!";
+          statusMsg.style.color = "#dc3545";
+          
+          await db.from("detangle_game_control").update({ command: "IDLE" }).eq("id", 1);
+
+          startBtn.disabled = false;
+          nameInput.disabled = false;
+          startAccepted = true;
+        } else if (data && data.command === "IDLE" && !startAccepted) {
+          clearInterval(checkInterval);
+          startAccepted = true;
+          statusMsg.style.color = "#fff";
+          statusMsg.innerText = "GO!";
+
+          startTime = Date.now();
+          timerInterval = setInterval(() => {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            timerDisplay.innerText = `${elapsed}s`;
+          }, 50);
+
+          const gameStartTimeStamp = new Date().toISOString();
+          pollInterval = setInterval(async () => {
+            const { data: resData } = await db.from("detangle_game_results")
+              .select("*")
+              .gt("created_at", gameStartTimeStamp)
+              .order("created_at", { ascending: false })
+              .limit(1);
+
+            if (resData && resData.length > 0) {
+              handleGameResult(resData[0]);
+            }
+          }, 1000);
+        }
+
+        if (checkAttempts > 15 && !startAccepted) {
+          clearInterval(checkInterval);
+          statusMsg.innerText = "ESP32 ERROR";
+          statusMsg.style.color = "#dc3545";
+          startBtn.disabled = false;
+          nameInput.disabled = false;
+        }
+      }, 300);
+    });
+  </script>
+</body>
+</html>
