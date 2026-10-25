@@ -27,7 +27,7 @@
       flex-direction: column;
       align-items: center;
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
       background: #1e1e1e;
       padding: 20px;
       border-radius: 12px;
@@ -42,8 +42,8 @@
       width: 100%;
     }
 
-    .back-btn {
-      padding: 8px 12px;
+    .back-btn, .reset-btn {
+      padding: 8px 10px;
       font-size: 14px;
       font-weight: bold;
       background: #444;
@@ -53,6 +53,7 @@
       cursor: pointer;
       text-decoration: none;
     }
+    .reset-btn { background: #d9534f; }
 
     input {
       flex: 1;
@@ -65,7 +66,7 @@
     }
 
     button {
-      padding: 10px 16px;
+      padding: 10px 14px;
       font-size: 14px;
       font-weight: bold;
       background: #007bff;
@@ -110,6 +111,7 @@
     <!-- Top Control Bar -->
     <div id="top-bar">
       <a href="index.html" class="back-btn">⬅</a>
+      <button id="reset-btn" class="reset-btn" title="Tare/Reset Scale">🔄</button>
       <div id="status-icon" title="ESP32 Status"></div>
       <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
       <button id="start-btn" disabled>START</button>
@@ -129,6 +131,7 @@
 
     const nameInput = document.getElementById("player-name");
     const startBtn = document.getElementById("start-btn");
+    const resetBtn = document.getElementById("reset-btn");
     const timerDisplay = document.getElementById("timer");
     const statusMsg = document.getElementById("status-msg");
     const statusIcon = document.getElementById("status-icon");
@@ -163,6 +166,21 @@
 
     nameInput.addEventListener("input", () => {
       startBtn.disabled = nameInput.value.trim() === "";
+    });
+
+    // Reset Scale Button Clicked
+    resetBtn.addEventListener("click", async () => {
+      resetBtn.disabled = true;
+      statusMsg.innerText = "RESETTING SCALE...";
+      statusMsg.style.color = "#ffc107";
+      
+      await db.from("detangle_game_control").update({ command: "RESET_SCALE" }).eq("id", 1);
+      
+      setTimeout(() => {
+        resetBtn.disabled = false;
+        statusMsg.innerText = "SCALE RESET!";
+        statusMsg.style.color = "#28a745";
+      }, 1000);
     });
 
     // Handle Game Result
