@@ -90,11 +90,28 @@
       flex-shrink: 0;
     }
 
-    #timer {
-      font-size: 48px;
+    .stats-row {
+      display: flex;
+      justify-content: space-around;
+      width: 100%;
+      margin: 10px 0;
+    }
+
+    .stat-box {
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 36px;
       font-weight: bold;
       font-family: monospace;
-      margin: 10px 0;
     }
 
     #status-msg {
@@ -102,6 +119,13 @@
       font-weight: bold;
       text-transform: uppercase;
       height: 24px;
+    }
+
+    .leaderboard-link {
+      color: #28a745;
+      font-size: 14px;
+      text-decoration: none;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -117,9 +141,21 @@
       <button id="start-btn" disabled>START</button>
     </div>
 
-    <!-- Timer Display -->
-    <div id="timer">0.00s</div>
+    <!-- Stats Row (Timer & Live Sensor Weight) -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-label">Time</div>
+        <div id="timer" class="stat-value">0.00s</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Scale Weight</div>
+        <div id="live-weight" class="stat-value">--g</div>
+      </div>
+    </div>
+
     <div id="status-msg">CLEAR ALL WEIGHTS!</div>
+    
+    <a href="detangle_leaderboard.html" class="leaderboard-link">🏆 View Detangle Leaderboard</a>
   </div>
 
   <script>
@@ -133,17 +169,19 @@
     const startBtn = document.getElementById("start-btn");
     const resetBtn = document.getElementById("reset-btn");
     const timerDisplay = document.getElementById("timer");
+    const liveWeightDisplay = document.getElementById("live-weight");
     const statusMsg = document.getElementById("status-msg");
     const statusIcon = document.getElementById("status-icon");
 
     let timerInterval = null;
     let pollInterval = null;
+    let weightPollInterval = null;
     let startTime = 0;
     let activeChannel = null;
 
-    // Check ESP32 Online Status
-    async function checkESPConnection() {
-      const { data } = await db.from("detangle_game_control").select("heartbeat").eq("id", 1).single();
+    // Check ESP32 Online Status and Fetch Live Weight
+    async function pollESPStatus() {
+      const { data } = await db.from("detangle_game_control").select("heartbeat, current_weight").eq("id", 1).single();
       const currentTime = Date.now();
 
       if (data && data.heartbeat !== null) {
@@ -156,13 +194,18 @@
             statusIcon.style.background = "#dc3545"; // Offline
           }
         }
+        
+        // Update live weight display if stored in control table
+        if (data.current_weight !== undefined && data.current_weight !== null) {
+          liveWeightDisplay.innerText = `${Math.round(data.current_weight)}g`;
+        }
       } else {
         statusIcon.style.background = "#dc3545";
       }
     }
     let lastHeartbeatValue = null;
     let lastChangeTime = Date.now();
-    setInterval(checkESPConnection, 3000);
+    setInterval(pollESPStatus, 1500);
 
     nameInput.addEventListener("input", () => {
       startBtn.disabled = nameInput.value.trim() === "";
@@ -276,7 +319,7 @@
         }
 
         if (checkAttempts > 15 && !startAccepted) {
-          clearInterval(checkInterval);
+          clearInterval(checkIdentifier);
           statusMsg.innerText = "ESP32 ERROR";
           statusMsg.style.color = "#dc3545";
           startBtn.disabled = false;
