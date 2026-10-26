@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Detangle Game</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
+  <style>
     * { box-sizing: border-box; }
     
     body {
@@ -32,19 +32,18 @@
       padding: 20px;
       border-radius: 12px;
       border: 1px solid #333;
-      gap: 16px;
+      gap: 14px;
     }
 
-    #top-bar {
+    .control-row {
       display: flex;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
       width: 100%;
-      overflow: hidden; /* Extra safety wrapper */
     }
 
     .back-btn, .reset-btn {
-      padding: 8px 10px;
+      padding: 10px 14px;
       font-size: 14px;
       font-weight: bold;
       background: #444;
@@ -53,14 +52,22 @@
       border-radius: 4px;
       cursor: pointer;
       text-decoration: none;
-      flex-shrink: 0; /* Prevents buttons from squishing */
     }
     .reset-btn { background: #d9534f; }
 
+    #status-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #dc3545;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
     input {
       flex: 1;
-      min-width: 0; /* <-- THIS FIXES THE OVERFLOW ISSUE */
-      padding: 10px;
+      min-width: 0;
+      padding: 12px;
       font-size: 14px;
       background: #222;
       border: 1px solid #444;
@@ -68,8 +75,8 @@
       border-radius: 4px;
     }
 
-    button {
-      padding: 10px 14px;
+    button#start-btn {
+      padding: 12px 20px;
       font-size: 14px;
       font-weight: bold;
       background: #007bff;
@@ -77,28 +84,20 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      flex-shrink: 0; /* Prevents button from squishing */
+      flex-shrink: 0;
     }
 
-    button:disabled {
+    button#start-btn:disabled {
       background: #444;
       color: #888;
       cursor: not-allowed;
-    }
-
-    #status-icon {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #dc3545;
-      flex-shrink: 0;
     }
 
     .stats-row {
       display: flex;
       justify-content: space-around;
       width: 100%;
-      margin: 10px 0;
+      margin: 6px 0;
     }
 
     .stat-box {
@@ -113,16 +112,30 @@
     }
 
     .stat-value {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: bold;
       font-family: monospace;
     }
 
     #status-msg {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: bold;
       text-transform: uppercase;
-      height: 24px;
+      height: 20px;
+      text-align: center;
+    }
+
+    /* Game Rules Blurb */
+    .instructions-box {
+      background: #252525;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #bbb;
+      line-height: 1.4;
+      width: 100%;
+      text-align: center;
+      border: 1px dashed #444;
     }
 
     .leaderboard-link {
@@ -136,11 +149,15 @@
 <body>
 
   <div class="game-card">
-    <!-- Top Control Bar -->
-    <div id="top-bar">
-      <a href="index.html" class="back-btn">⬅</a>
-      <button id="reset-btn" class="reset-btn" title="Tare/Reset Scale">🔄</button>
+    <!-- Row 1: Back, Reset, and Connection Status Icon -->
+    <div class="control-row">
+      <a href="index.html" class="back-btn">⬅ Home</a>
+      <button id="reset-btn" class="reset-btn" title="Tare/Reset Scale">🔄 Reset Scale</button>
       <div id="status-icon" title="ESP32 Status"></div>
+    </div>
+
+    <!-- Row 2: Player Name Input and Start Button -->
+    <div class="control-row">
       <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
       <button id="start-btn" disabled>START</button>
     </div>
@@ -158,6 +175,11 @@
     </div>
 
     <div id="status-msg">CLEAR ALL WEIGHTS!</div>
+
+    <!-- Rules Blurb -->
+    <div class="instructions-box">
+      <strong>How to Play:</strong> Place all 4 weights on the plate, enter your name, and hit Start. Navigate through the physical obstacles outside and remove all weights as fast as possible to win!
+    </div>
     
     <a href="detangle_leaderboard.html" class="leaderboard-link">🏆 View Detangle Leaderboard</a>
   </div>
@@ -179,13 +201,13 @@
 
     let timerInterval = null;
     let pollInterval = null;
-    let weightPollInterval = null;
     let startTime = 0;
     let activeChannel = null;
+    let lastKnownWeight = 0;
 
-    // Check ESP32 Online Status and Fetch Live Weight
+    // Check ESP32 Online Status and Live Weight, auto-clear errors when weights are placed back
     async function pollESPStatus() {
-      const { data } = await db.from("detangle_game_control").select("heartbeat, current_weight").eq("id", 1).single();
+      const { data } = await db.from("detangle_game_control").select("heartbeat, current_weight, command").eq("id", 1).single();
       const currentTime = Date.now();
 
       if (data && data.heartbeat !== null) {
@@ -199,9 +221,15 @@
           }
         }
         
-        // Update live weight display if stored in control table
         if (data.current_weight !== undefined && data.current_weight !== null) {
+          lastKnownWeight = data.current_weight;
           liveWeightDisplay.innerText = `${Math.round(data.current_weight)}g`;
+        }
+
+        // Auto-clear error message if player places weights back on scale
+        if (data.command === "IDLE" && statusMsg.innerText.includes("PLACE ALL 4")) {
+          statusMsg.innerText = "CLEAR ALL WEIGHTS!";
+          statusMsg.style.color = "#fff";
         }
       } else {
         statusIcon.style.background = "#dc3545";
@@ -215,7 +243,6 @@
       startBtn.disabled = nameInput.value.trim() === "";
     });
 
-    // Reset Scale Button Clicked
     resetBtn.addEventListener("click", async () => {
       resetBtn.disabled = true;
       statusMsg.innerText = "RESETTING SCALE...";
@@ -230,7 +257,6 @@
       }, 1000);
     });
 
-    // Handle Game Result
     async function handleGameResult(result) {
       if (!timerInterval) return;
 
@@ -264,7 +290,6 @@
       }, 3000);
     }
 
-    // Start Button Clicked
     startBtn.addEventListener("click", async () => {
       startBtn.disabled = true;
       nameInput.disabled = true;
@@ -291,8 +316,6 @@
           statusMsg.innerText = "PLACE ALL 4 WEIGHTS FIRST!";
           statusMsg.style.color = "#dc3545";
           
-          await db.from("detangle_game_control").update({ command: "IDLE" }).eq("id", 1);
-
           startBtn.disabled = false;
           nameInput.disabled = false;
           startAccepted = true;
@@ -323,7 +346,7 @@
         }
 
         if (checkAttempts > 15 && !startAccepted) {
-          clearInterval(checkIdentifier);
+          clearInterval(checkInterval);
           statusMsg.innerText = "ESP32 ERROR";
           statusMsg.style.color = "#dc3545";
           startBtn.disabled = false;
