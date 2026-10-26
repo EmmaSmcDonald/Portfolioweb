@@ -35,15 +35,16 @@
       gap: 14px;
     }
 
-    .control-row {
+    /* Single-row top control bar */
+    #top-bar {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
       width: 100%;
     }
 
     .back-btn, .reset-btn {
-      padding: 10px 14px;
+      padding: 8px 10px;
       font-size: 14px;
       font-weight: bold;
       background: #444;
@@ -52,22 +53,22 @@
       border-radius: 4px;
       cursor: pointer;
       text-decoration: none;
+      flex-shrink: 0;
     }
     .reset-btn { background: #d9534f; }
 
     #status-icon {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       background: #dc3545;
-      margin-left: auto;
       flex-shrink: 0;
     }
 
     input {
       flex: 1;
       min-width: 0;
-      padding: 12px;
+      padding: 10px;
       font-size: 14px;
       background: #222;
       border: 1px solid #444;
@@ -76,7 +77,7 @@
     }
 
     button#start-btn {
-      padding: 12px 20px;
+      padding: 10px 14px;
       font-size: 14px;
       font-weight: bold;
       background: #007bff;
@@ -149,15 +150,11 @@
 <body>
 
   <div class="game-card">
-    <!-- Row 1: Back, Reset, and Connection Status Icon -->
-    <div class="control-row">
-      <a href="index.html" class="back-btn">⬅ Home</a>
-      <button id="reset-btn" class="reset-btn" title="Tare/Reset Scale">🔄 Reset Scale</button>
+    <!-- Single Top Bar Row -->
+    <div id="top-bar">
+      <a href="index.html" class="back-btn">⬅</a>
+      <button id="reset-btn" class="reset-btn" title="Tare/Reset Scale">🔄</button>
       <div id="status-icon" title="ESP32 Status"></div>
-    </div>
-
-    <!-- Row 2: Player Name Input and Start Button -->
-    <div class="control-row">
       <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
       <button id="start-btn" disabled>START</button>
     </div>
@@ -205,7 +202,6 @@
     let activeChannel = null;
     let lastKnownWeight = 0;
 
-    // Check ESP32 Online Status and Live Weight, auto-clear errors when weights are placed back
     async function pollESPStatus() {
       const { data } = await db.from("detangle_game_control").select("heartbeat, current_weight, command").eq("id", 1).single();
       const currentTime = Date.now();
@@ -214,10 +210,10 @@
         if (data.heartbeat !== lastHeartbeatValue) {
           lastHeartbeatValue = data.heartbeat;
           lastChangeTime = currentTime;
-          statusIcon.style.background = "#28a745"; // Online
+          statusIcon.style.background = "#28a745";
         } else {
           if (currentTime - lastChangeTime > 12000) {
-            statusIcon.style.background = "#dc3545"; // Offline
+            statusIcon.style.background = "#dc3545";
           }
         }
         
@@ -226,7 +222,6 @@
           liveWeightDisplay.innerText = `${Math.round(data.current_weight)}g`;
         }
 
-        // Auto-clear error message if player places weights back on scale
         if (data.command === "IDLE" && statusMsg.innerText.includes("PLACE ALL 4")) {
           statusMsg.innerText = "CLEAR ALL WEIGHTS!";
           statusMsg.style.color = "#fff";
