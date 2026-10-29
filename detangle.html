@@ -5,9 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Detangle Game</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
-    * { box-sizing: border-box; }
-    
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
     body {
       display: flex;
       flex-direction: column;
@@ -17,45 +26,71 @@
       background: #121212;
       color: #fff;
       margin: 0;
-      padding: 10px;
+
+      padding-top: max(6px, env(safe-area-inset-top));
+      padding-right: 6px;
+      padding-bottom: max(6px, env(safe-area-inset-bottom));
+      padding-left: 6px;
+
+      width: 100%;
+      height: 100vh;
       height: 100dvh;
       overflow: hidden;
+
+      transform: rotate(180deg);
+      transform-origin: center center;
     }
 
     .game-card {
       display: flex;
       flex-direction: column;
       align-items: center;
+
       width: 100%;
-      max-width: 420px;
+      max-width: 520px;
+      height: 100%;
+      min-height: 0;
+
       background: #1e1e1e;
-      padding: 20px;
+      padding: 8px;
       border-radius: 12px;
       border: 1px solid #333;
-      gap: 14px;
+      gap: 7px;
+
+      overflow: hidden;
     }
 
-    /* Single-row top control bar */
     #top-bar {
       display: flex;
       gap: 6px;
       align-items: center;
       width: 100%;
+      flex-shrink: 0;
     }
 
-    .back-btn, .reset-btn {
+    .back-btn,
+    .reset-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+
       padding: 8px 10px;
       font-size: 14px;
       font-weight: bold;
+
       background: #444;
       color: #fff;
       border: none;
       border-radius: 4px;
+
       cursor: pointer;
       text-decoration: none;
       flex-shrink: 0;
     }
-    .reset-btn { background: #d9534f; }
+
+    .reset-btn {
+      background: #d9534f;
+    }
 
     #status-icon {
       width: 12px;
@@ -68,8 +103,11 @@
     input {
       flex: 1;
       min-width: 0;
+      width: 0;
+
       padding: 10px;
       font-size: 14px;
+
       background: #222;
       border: 1px solid #444;
       color: #fff;
@@ -80,10 +118,12 @@
       padding: 10px 14px;
       font-size: 14px;
       font-weight: bold;
+
       background: #007bff;
       color: #fff;
       border: none;
       border-radius: 4px;
+
       cursor: pointer;
       flex-shrink: 0;
     }
@@ -97,92 +137,236 @@
     .stats-row {
       display: flex;
       justify-content: space-around;
+      align-items: center;
+
       width: 100%;
-      margin: 6px 0;
+      margin: 0;
+      flex-shrink: 0;
     }
 
     .stat-box {
       text-align: center;
+      min-width: 0;
     }
 
     .stat-label {
-      font-size: 12px;
+      font-size: 10px;
       color: #888;
       text-transform: uppercase;
-      margin-bottom: 4px;
+      margin-bottom: 1px;
     }
 
     .stat-value {
-      font-size: 32px;
+      font-size: 23px;
       font-weight: bold;
       font-family: monospace;
     }
 
     #status-msg {
-      font-size: 15px;
+      width: 100%;
+      height: 18px;
+      flex-shrink: 0;
+
+      font-size: 12px;
       font-weight: bold;
       text-transform: uppercase;
-      height: 20px;
       text-align: center;
+
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
-    /* Game Rules Blurb */
     .instructions-box {
       background: #252525;
-      padding: 10px 12px;
+      padding: 7px 8px;
       border-radius: 6px;
-      font-size: 12px;
+
+      font-size: 11px;
       color: #bbb;
-      line-height: 1.4;
+      line-height: 1.25;
+
       width: 100%;
       text-align: center;
       border: 1px dashed #444;
+      flex-shrink: 0;
+    }
+
+    .instructions-box p {
+      margin: 3px 0;
     }
 
     .leaderboard-link {
       color: #28a745;
-      font-size: 14px;
+      font-size: 12px;
       text-decoration: none;
       font-weight: bold;
+      flex-shrink: 0;
+      padding-bottom: 2px;
+    }
+
+    #camera-container {
+      position: relative;
+      width: 100%;
+
+      flex: 1 1 auto;
+      min-height: 0;
+
+      background: #000;
+      border-radius: 6px;
+      overflow: hidden;
+
+      margin-top: auto;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: rotate(180deg);
+    }
+
+    .deadzone-block {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+
+      width: 100%;
+      height: 15%;
+
+      background: #000;
+      border-top: 2px dashed rgba(255, 255, 255, 0.3);
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 11px;
+      letter-spacing: 2px;
+
+      pointer-events: none;
+    }
+
+    .game-card.game-active .instructions-box,
+    .game-card.game-active .leaderboard-link {
+      display: none;
+    }
+
+    .game-card.game-active {
+      gap: 5px;
+    }
+
+    .game-card.game-active .stats-row {
+      justify-content: space-between;
+      padding: 0 10px;
+    }
+
+    .game-card.game-active .stat-value {
+      font-size: 18px;
+    }
+
+    .game-card.game-active .stat-label {
+      font-size: 9px;
+    }
+
+    @media (max-width: 380px) {
+      #top-bar {
+        gap: 4px;
+      }
+
+      .back-btn,
+      .reset-btn {
+        padding: 8px;
+      }
+
+      input {
+        padding: 8px 5px;
+        font-size: 12px;
+      }
+
+      button#start-btn {
+        padding: 8px 9px;
+        font-size: 12px;
+      }
+    }
+
+    @media (max-height: 700px) {
+      .instructions-box {
+        padding: 5px 7px;
+      }
+
+      .instructions-box p {
+        margin: 2px 0;
+      }
+
+      .game-card {
+        gap: 5px;
+      }
     }
   </style>
 </head>
+
 <body>
 
   <div class="game-card">
-    <!-- Single Top Bar Row -->
+
     <div id="top-bar">
-      <a href="index.html" class="back-btn">⬅</a>
-      <button id="reset-btn" class="reset-btn" title="Tare/Reset Scale">🔄</button>
+      <a href="index.html" class="back-btn" aria-label="Back to menu">⬅</a>
+
+      <button
+        id="reset-btn"
+        class="reset-btn"
+        title="Tare/Reset Scale"
+        aria-label="Reset scale"
+      >🔄</button>
+
       <div id="status-icon" title="ESP32 Status"></div>
-      <input type="text" id="player-name" placeholder="Player Name" autocomplete="off">
+
+      <input
+        type="text"
+        id="player-name"
+        placeholder="Player Name"
+        autocomplete="off"
+      >
+
       <button id="start-btn" disabled>START</button>
     </div>
 
-    <!-- Stats Row (Timer & Live Sensor Weight) -->
     <div class="stats-row">
+
       <div class="stat-box">
         <div class="stat-label">Time</div>
         <div id="timer" class="stat-value">0.00s</div>
       </div>
+
       <div class="stat-box">
         <div class="stat-label">Scale Weight</div>
         <div id="live-weight" class="stat-value">--g</div>
       </div>
+
     </div>
 
     <div id="status-msg">CLEAR ALL WEIGHTS!</div>
 
-    <!-- Rules Blurb -->
     <div class="instructions-box">
-      <strong>How to Play:</strong> 
+      <strong>How to Play:</strong>
       <p>1. Ensure the weight plate is 0g before playing or press the reset button if it is not.</p>
       <p>2. Place all 4 weights on the plate.</p>
       <p>3. Enter your name.</p>
       <p>4. Press start!</p>
     </div>
-    
-    <a href="detangle_leaderboard.html" class="leaderboard-link">🏆 View Detangle Leaderboard</a>
+
+    <a href="detangle_leaderboard.html" class="leaderboard-link">
+      🏆 View Detangle Leaderboard
+    </a>
+
+    <div id="camera-container">
+      <video id="webcam" autoplay playsinline></video>
+      <div class="deadzone-block">DEADZONE</div>
+    </div>
+
   </div>
 
   <script>
@@ -199,43 +383,92 @@
     const liveWeightDisplay = document.getElementById("live-weight");
     const statusMsg = document.getElementById("status-msg");
     const statusIcon = document.getElementById("status-icon");
+    const videoElement = document.getElementById("webcam");
+    const gameCard = document.querySelector(".game-card");
 
+    let currentStream = null;
     let timerInterval = null;
     let pollInterval = null;
     let startTime = 0;
     let activeChannel = null;
     let lastKnownWeight = 0;
 
+    let lastHeartbeatValue = null;
+    let lastChangeTime = Date.now();
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } }
+        });
+
+        currentStream = stream;
+        videoElement.srcObject = stream;
+
+      } catch (e) {
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            video: true
+          });
+
+          currentStream = fallbackStream;
+          videoElement.srcObject = fallbackStream;
+
+        } catch (err) {
+          console.error("Camera unavailable.");
+          statusMsg.innerText = "NO CAMERA";
+          statusMsg.style.color = "#dc3545";
+        }
+      }
+    }
+
+    startCamera();
+
     async function pollESPStatus() {
-      const { data } = await db.from("detangle_game_control").select("heartbeat, current_weight, command").eq("id", 1).single();
+      const { data, error } = await db
+        .from("detangle_game_control")
+        .select("heartbeat, current_weight, command")
+        .eq("id", 1)
+        .single();
+
       const currentTime = Date.now();
 
-      if (data && data.heartbeat !== null) {
+      if (error || !data) {
+        statusIcon.style.background = "#dc3545";
+        return;
+      }
+
+      if (data.heartbeat !== null) {
         if (data.heartbeat !== lastHeartbeatValue) {
           lastHeartbeatValue = data.heartbeat;
           lastChangeTime = currentTime;
           statusIcon.style.background = "#28a745";
-        } else {
-          if (currentTime - lastChangeTime > 12000) {
-            statusIcon.style.background = "#dc3545";
-          }
-        }
-        
-        if (data.current_weight !== undefined && data.current_weight !== null) {
-          lastKnownWeight = data.current_weight;
-          liveWeightDisplay.innerText = `${Math.round(data.current_weight)}g`;
-        }
 
-        if (data.command === "IDLE" && statusMsg.innerText.includes("PLACE ALL 4")) {
-          statusMsg.innerText = "CLEAR ALL WEIGHTS!";
-          statusMsg.style.color = "#fff";
+        } else if (currentTime - lastChangeTime > 12000) {
+          statusIcon.style.background = "#dc3545";
         }
       } else {
         statusIcon.style.background = "#dc3545";
       }
+
+      if (
+        data.current_weight !== undefined &&
+        data.current_weight !== null
+      ) {
+        lastKnownWeight = data.current_weight;
+        liveWeightDisplay.innerText =
+          `${Math.round(data.current_weight)}g`;
+      }
+
+      if (
+        data.command === "IDLE" &&
+        statusMsg.innerText.includes("PLACE ALL 4")
+      ) {
+        statusMsg.innerText = "CLEAR ALL WEIGHTS!";
+        statusMsg.style.color = "#fff";
+      }
     }
-    let lastHeartbeatValue = null;
-    let lastChangeTime = Date.now();
+
     setInterval(pollESPStatus, 1500);
 
     nameInput.addEventListener("input", () => {
@@ -244,11 +477,15 @@
 
     resetBtn.addEventListener("click", async () => {
       resetBtn.disabled = true;
+
       statusMsg.innerText = "RESETTING SCALE...";
       statusMsg.style.color = "#ffc107";
-      
-      await db.from("detangle_game_control").update({ command: "RESET_SCALE" }).eq("id", 1);
-      
+
+      await db
+        .from("detangle_game_control")
+        .update({ command: "RESET_SCALE" })
+        .eq("id", 1);
+
       setTimeout(() => {
         resetBtn.disabled = false;
         statusMsg.innerText = "SCALE RESET!";
@@ -261,16 +498,23 @@
 
       clearInterval(timerInterval);
       clearInterval(pollInterval);
-      timerInterval = null;
 
-      const finalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+      timerInterval = null;
+      pollInterval = null;
+
+      const finalTime =
+        ((Date.now() - startTime) / 1000).toFixed(2);
+
       timerDisplay.innerText = `${finalTime}s`;
 
       if (result.id) {
-        await db.from("detangle_game_results").update({ 
-          player_name: nameInput.value.trim(),
-          time_seconds: parseFloat(finalTime) 
-        }).eq("id", result.id);
+        await db
+          .from("detangle_game_results")
+          .update({
+            player_name: nameInput.value.trim(),
+            time_seconds: parseFloat(finalTime)
+          })
+          .eq("id", result.id);
       }
 
       statusMsg.innerText = "SUCCESS!";
@@ -284,55 +528,92 @@
       setTimeout(() => {
         startBtn.disabled = false;
         nameInput.disabled = false;
+
         statusMsg.innerText = "CLEAR ALL WEIGHTS!";
         statusMsg.style.color = "#fff";
+
+        gameCard.classList.remove("game-active");
       }, 3000);
     }
 
     startBtn.addEventListener("click", async () => {
+      gameCard.classList.add("game-active");
+
       startBtn.disabled = true;
       nameInput.disabled = true;
+
       statusMsg.innerText = "CHECKING WEIGHTS...";
       statusMsg.style.color = "#ffc107";
 
-      activeChannel = db.channel('detangle-results')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'detangle_game_results' }, payload => {
-          handleGameResult(payload.new);
-        })
+      activeChannel = db.channel("detangle-results")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "detangle_game_results"
+          },
+          payload => {
+            handleGameResult(payload.new);
+          }
+        )
         .subscribe();
 
-      await db.from("detangle_game_control").update({ command: "START" }).eq("id", 1);
+      await db
+        .from("detangle_game_control")
+        .update({ command: "START" })
+        .eq("id", 1);
 
       let checkAttempts = 0;
       let startAccepted = false;
 
       const checkInterval = setInterval(async () => {
         checkAttempts++;
-        const { data } = await db.from("detangle_game_control").select("command").eq("id", 1).single();
+
+        const { data } = await db
+          .from("detangle_game_control")
+          .select("command")
+          .eq("id", 1)
+          .single();
 
         if (data && data.command === "ERROR_WEIGHTS") {
           clearInterval(checkInterval);
+
+          gameCard.classList.remove("game-active");
+
           statusMsg.innerText = "PLACE ALL 4 WEIGHTS FIRST!";
           statusMsg.style.color = "#dc3545";
-          
+
           startBtn.disabled = false;
           nameInput.disabled = false;
+
           startAccepted = true;
-        } else if (data && data.command === "IDLE" && !startAccepted) {
+
+        } else if (
+          data &&
+          data.command === "IDLE" &&
+          !startAccepted
+        ) {
           clearInterval(checkInterval);
           startAccepted = true;
+
           statusMsg.style.color = "#fff";
           statusMsg.innerText = "GO!";
 
           startTime = Date.now();
+
           timerInterval = setInterval(() => {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            const elapsed =
+              ((Date.now() - startTime) / 1000).toFixed(2);
+
             timerDisplay.innerText = `${elapsed}s`;
           }, 50);
 
           const gameStartTimeStamp = new Date().toISOString();
+
           pollInterval = setInterval(async () => {
-            const { data: resData } = await db.from("detangle_game_results")
+            const { data: resData } = await db
+              .from("detangle_game_results")
               .select("*")
               .gt("created_at", gameStartTimeStamp)
               .order("created_at", { ascending: false })
@@ -346,13 +627,19 @@
 
         if (checkAttempts > 15 && !startAccepted) {
           clearInterval(checkInterval);
+
+          gameCard.classList.remove("game-active");
+
           statusMsg.innerText = "ESP32 ERROR";
           statusMsg.style.color = "#dc3545";
+
           startBtn.disabled = false;
           nameInput.disabled = false;
         }
+
       }, 300);
     });
   </script>
+
 </body>
 </html>
